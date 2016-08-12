@@ -33,6 +33,7 @@ import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.DateFormat;
 import android.text.format.Time;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.WindowInsets;
 
@@ -94,6 +95,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
         Paint mBackgroundPaint;
         Paint mTimePaint;
         Paint mDatePaint;
+        Paint mSeparatorPaint;
         boolean mAmbient;
         Time mTime;
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
@@ -137,7 +139,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
 
             mTimePaint = new Paint();
             mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
-            mDatePaint = createTextPaint(resources.getColor(R.color.digital_text));
+            mDatePaint = createTextPaint(resources.getColor(R.color.digital_text2));
+            mSeparatorPaint = createTextPaint(resources.getColor(R.color.digital_text2));
 
             mTime = new Time();
             mCalendar = Calendar.getInstance();
@@ -209,11 +212,12 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             boolean isRound = insets.isRound();
             mXOffset = resources.getDimension(isRound
                     ? R.dimen.digital_x_offset_round : R.dimen.digital_x_offset);
-            float textSize = resources.getDimension(isRound
+            float timeTextSize = resources.getDimension(isRound
                     ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
-
-            mTimePaint.setTextSize(textSize);
-            mDatePaint.setTextSize(resources.getDimension(R.dimen.digital_date_text_size));
+            float dateTextSize = resources.getDimension(isRound
+                    ? R.dimen.digital_date_text_size_round : R.dimen.digital_date_text_size);
+            mTimePaint.setTextSize(timeTextSize);
+            mDatePaint.setTextSize(dateTextSize);
         }
 
         @Override
@@ -285,15 +289,22 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
             mTime.setToNow();
             String time = String.format("%d:%02d", mTime.hour, mTime.minute);
-            canvas.drawText(time, mXOffset, mYOffset, mTimePaint);
+
+            canvas.drawText(time, bounds.centerX() - (mTimePaint.measureText(time))/2 , mYOffset, mTimePaint);
 
             // Only render the day of week and date if there is no peek card, so they do not bleed
             // into each other in ambient mode.
             if (getPeekCardPosition().isEmpty()) {
                 // Date
+                String formattedDate = mDateFormat.format(mDate).toUpperCase();
                 canvas.drawText(
-                        mDateFormat.format(mDate),
-                        mXOffset, mYOffset + mLineHeight, mDatePaint);
+                        formattedDate,
+                        bounds.centerX() - (mDatePaint.measureText(formattedDate))/2 , mYOffset + mLineHeight, mDatePaint);
+
+
+                canvas.drawLine(bounds.centerX() - 35, bounds.centerY() + 20,
+                                bounds.centerX() + 35, bounds.centerY() + 20, mSeparatorPaint);
+
             }
         }
 
