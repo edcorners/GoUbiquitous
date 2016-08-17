@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package com.edison.android.sunshinewear;
+package com.example.android.sunshine.app;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -29,6 +31,8 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.DateFormat;
@@ -37,19 +41,34 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.WindowInsets;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.wearable.Asset;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
+import com.google.android.gms.wearable.Wearable;
+
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Digital watch face with seconds. In ambient mode, the seconds aren't displayed. On devices with
  * low-bit ambient mode, the text is drawn without anti-aliasing in ambient mode.
  */
-public class SunshineWatchFace extends CanvasWatchFaceService {
+public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi.DataListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LoadBitmapTask.Callback {
+
+    private final String LOG_TAG = SunshineWatchFace.class.getSimpleName();
     private static final Typeface NORMAL_TYPEFACE =
             Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
 
@@ -64,9 +83,67 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
      */
     private static final int MSG_UPDATE_TIME = 0;
 
+    GoogleApiClient mGoogleApiClient;
+    private String mHigh;
+    private String mLow;
+    private Bitmap mIconBitmap;
+
     @Override
     public Engine onCreateEngine() {
+        mGoogleApiClient = new GoogleApiClient.Builder(SunshineWatchFace.this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(Wearable.API)
+                .build();
+        mGoogleApiClient.connect();
         return new Engine();
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        Wearable.DataApi.addListener(mGoogleApiClient, this);
+        Log.d(LOG_TAG, "onConnected: " + bundle);
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        Log.d(LOG_TAG, "onConnectionSuspended: " + i);
+        Wearable.DataApi.removeListener(mGoogleApiClient, this);
+    }
+
+    @Override
+    public void onDataChanged(DataEventBuffer dataEventBuffer) {
+        Log.d(LOG_TAG, "onDataChanged: " + dataEventBuffer);
+        for (DataEvent dataEvent : dataEventBuffer) {
+            if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
+                continue;
+            }
+
+            DataItem dataItem = dataEvent.getDataItem();
+            String path = dataItem.getUri().getPath();
+            if (!path.equals("/weather_data")) {
+                continue;
+            }
+
+            DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
+            DataMap dataMap = dataMapItem.getDataMap();
+            mHigh = dataMap.getString("high");
+            mLow = dataMap.getString("low");
+            Asset asset = dataMap.getAsset("icon");
+            Asset[] assets = {asset};
+            LoadBitmapTask loadBitmapTask = new LoadBitmapTask(mGoogleApiClient, this);
+            loadBitmapTask.execute(assets);
+        }
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
+    }
+
+    @Override
+    public void onLoadBitmapFinished(Bitmap bitmap) {
+        mIconBitmap = bitmap;
     }
 
     private static class EngineHandler extends Handler {
@@ -96,6 +173,10 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
         Paint mTimePaint;
         Paint mDatePaint;
         Paint mSeparatorPaint;
+        Paint mHighTempPaint;
+        Paint mLowTempPaint;
+        Paint mIconPaint;
+
         boolean mAmbient;
         Time mTime;
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
@@ -137,10 +218,12 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
 
-            mTimePaint = new Paint();
             mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
             mDatePaint = createTextPaint(resources.getColor(R.color.digital_text2));
             mSeparatorPaint = createTextPaint(resources.getColor(R.color.digital_text2));
+            mHighTempPaint = createTextPaint(resources.getColor(R.color.digital_text));
+            mLowTempPaint = createTextPaint(resources.getColor(R.color.digital_text2));
+            mIconPaint = new Paint();
 
             mTime = new Time();
             mCalendar = Calendar.getInstance();
@@ -218,6 +301,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
                     ? R.dimen.digital_date_text_size_round : R.dimen.digital_date_text_size);
             mTimePaint.setTextSize(timeTextSize);
             mDatePaint.setTextSize(dateTextSize);
+            mHighTempPaint.setTextSize(timeTextSize);
+            mLowTempPaint.setTextSize(timeTextSize);
         }
 
         @Override
@@ -277,7 +362,6 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             long now = System.currentTimeMillis();
             mCalendar.setTimeInMillis(now);
             mDate.setTime(now);
-            boolean is24Hour = DateFormat.is24HourFormat(SunshineWatchFace.this);
 
             // Draw the background.
             if (isInAmbientMode()) {
@@ -285,6 +369,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             } else {
                 canvas.drawRect(0, 0, bounds.width(), bounds.height(), mBackgroundPaint);
             }
+
+            mYOffset = (float) (bounds.centerY() - bounds.centerY()/2 * 0.75);
 
             // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
             mTime.setToNow();
@@ -302,9 +388,16 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
                         bounds.centerX() - (mDatePaint.measureText(formattedDate))/2 , mYOffset + mLineHeight, mDatePaint);
 
 
-                canvas.drawLine(bounds.centerX() - 35, bounds.centerY() + 20,
-                                bounds.centerX() + 35, bounds.centerY() + 20, mSeparatorPaint);
-
+                canvas.drawLine(bounds.centerX() - 35, bounds.centerY() + 10,
+                                bounds.centerX() + 35, bounds.centerY() + 10, mSeparatorPaint);
+                if(mHigh != null) {
+                    canvas.drawText(
+                        String.valueOf(mHigh),
+                            (float)(bounds.centerX() - bounds.centerX() * 0.15) ,(float)(bounds.centerY() + bounds.centerY() * 0.60), mHighTempPaint);
+                }
+                if(mIconBitmap != null) {
+                    canvas.drawBitmap(mIconBitmap, (float)(bounds.centerX() - bounds.centerX() * 0.75), (float)(bounds.centerY() + bounds.centerY() * 0.20), mIconPaint);
+                }
             }
         }
 
