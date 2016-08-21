@@ -15,23 +15,30 @@ import android.util.Log;
 
 import com.bumptech.glide.Glide;
 import com.example.android.sunshine.app.data.WeatherContract;
+import com.example.android.sunshine.app.sync.SunshineSyncAdapter;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
+import com.google.android.gms.wearable.WearableListenerService;
 
 import java.util.concurrent.ExecutionException;
 
 /**
  * Created by Edison on 8/18/2016.
  */
-public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
-        implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener{
+public class WatchFaceUpdater extends WearableListenerService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
-    public final String LOG_TAG = WatchFaceClient.class.getSimpleName();
+    public final String LOG_TAG = WatchFaceUpdater.class.getSimpleName();
 
     private static final String[] NOTIFY_WEATHER_PROJECTION = new String[] {
             WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
@@ -52,11 +59,10 @@ public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
     private double high;
     private double low;
 
-    public WatchFaceClient(Context mContext) {
-        this.mContext = mContext;
-    }
+    public WatchFaceUpdater() {}
 
-    public void updateWatchFace() {
+    public void updateWatchFace(Context context) {
+        this.mContext = context;
         //Context context = getContext();
         //checking the last update and notify if it' the first of the day
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mContext);
@@ -80,8 +86,8 @@ public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
             int artResourceId = Utility.getArtResourceForWeatherCondition(weatherId);
             String artUrl = Utility.getArtUrlForWeatherCondition(mContext, weatherId);
 
-            int iconWidth =  resources.getDimensionPixelSize(R.dimen.watch_face_icon_default);
-            int iconHeight = resources.getDimensionPixelSize(R.dimen.watch_face_icon_default);
+            int iconWidth =  resources.getDimensionPixelSize(R.dimen.watch_face_icon_size);
+            int iconHeight = resources.getDimensionPixelSize(R.dimen.watch_face_icon_size);
 
             try {
                 mIcon = Glide.with(mContext)
@@ -108,12 +114,6 @@ public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
 
     }
 
-    //@Override
-    protected Void doInBackground(Void... params) {
-        updateWatchFace();
-        return null;
-    }
-
     @Override
     public void onConnected(Bundle bundle) {
         Log.d(LOG_TAG, "onConnected: " + bundle);
@@ -122,6 +122,7 @@ public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
         dataMapRequest.getDataMap().putString("high", Utility.formatTemperature(mContext, high));
         dataMapRequest.getDataMap().putString("low", Utility.formatTemperature(mContext,low));
         dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(mIcon));
+        dataMapRequest.getDataMap().putString("timestamp","_"+ System.currentTimeMillis());
         Log.d(LOG_TAG, " high:"+high+" low:"+low);
         PutDataRequest request = dataMapRequest.asPutDataRequest();
         Wearable.DataApi.putDataItem(mGoogleApiClient, request).setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
@@ -144,5 +145,23 @@ public class WatchFaceClient /*extends AsyncTask<Void,Void,Void>*/
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
         Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
+    }
+
+    @Override
+    public void onDataChanged(DataEventBuffer dataEvents) {
+        Log.d(LOG_TAG, "onDataChanged: " + dataEvents);
+        for (DataEvent dataEvent : dataEvents) {
+            if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
+                continue;
+            }
+
+            DataItem dataItem = dataEvent.getDataItem();
+            String path = dataItem.getUri().getPath();
+            if (!path.equals("/weather_data_request")) {
+                continue;
+            }
+            SunshineSyncAdapter.syncImmediately(this);
+        }
+        super.onDataChanged(dataEvents);
     }
 }

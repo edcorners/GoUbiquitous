@@ -43,6 +43,7 @@ import android.view.WindowInsets;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEvent;
@@ -50,6 +51,8 @@ import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataItem;
 import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.DataMapItem;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
 import java.io.InputStream;
@@ -88,6 +91,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
     private String mLow;
     private Bitmap mIconBitmap;
 
+
     @Override
     public Engine onCreateEngine() {
         mGoogleApiClient = new GoogleApiClient.Builder(SunshineWatchFace.this)
@@ -96,6 +100,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                 .addApi(Wearable.API)
                 .build();
         mGoogleApiClient.connect();
+        requestData();
         return new Engine();
     }
 
@@ -134,6 +139,23 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
             LoadBitmapTask loadBitmapTask = new LoadBitmapTask(mGoogleApiClient, this);
             loadBitmapTask.execute(assets);
         }
+    }
+
+    private void requestData() {
+        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/weather_data_request");
+        putDataMapRequest.getDataMap().putLong("timestamp", System.currentTimeMillis());
+        PutDataRequest putDataRequest = putDataMapRequest.asPutDataRequest();
+        Wearable.DataApi.putDataItem(mGoogleApiClient, putDataRequest)
+                .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                    @Override
+                    public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
+                        if (!dataItemResult.getStatus().isSuccess()){
+                            Log.e(LOG_TAG, "Requesting data failed");
+                        } else {
+                            Log.d(LOG_TAG, "Requesting data succeeded");
+                        }
+                    }
+                });
     }
 
     @Override

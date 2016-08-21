@@ -17,8 +17,7 @@
     <!-- Default screen margins, per the Android Design guidelines. -->
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
-
-    <dimen name="watch_face_icon_default">28dp</dimen>
+    <dimen name="watch_face_icon_size">50px</dimen>
     <dimen name="notification_large_icon_default">48dp</dimen>
     <dimen name="forecast_detail_horizontal_padding">32dp</dimen>
 
