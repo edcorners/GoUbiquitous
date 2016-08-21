@@ -176,6 +176,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
         Paint mHighTempPaint;
         Paint mLowTempPaint;
         Paint mIconPaint;
+        Resources resources;
 
         boolean mAmbient;
         Time mTime;
@@ -192,9 +193,6 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
         Date mDate;
         java.text.DateFormat mDateFormat;
 
-        float mXOffset;
-        float mYOffset;
-        float mLineHeight;
         /**
          * Whether the display supports fewer bits for each color in ambient mode. When true, we
          * disable anti-aliasing in ambient mode.
@@ -211,18 +209,16 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                     .setShowSystemUiTime(false)
                     .setAcceptsTapEvents(true)
                     .build());
-            Resources resources = SunshineWatchFace.this.getResources();
-            mYOffset = resources.getDimension(R.dimen.digital_y_offset);
-            mLineHeight = resources.getDimension(R.dimen.digital_line_height);
+            resources = SunshineWatchFace.this.getResources();
 
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
 
             mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
-            mDatePaint = createTextPaint(resources.getColor(R.color.digital_text2));
-            mSeparatorPaint = createTextPaint(resources.getColor(R.color.digital_text2));
+            mDatePaint = createTextPaint(resources.getColor(R.color.digital_text_dark));
+            mSeparatorPaint = createTextPaint(resources.getColor(R.color.digital_text_dark));
             mHighTempPaint = createTextPaint(resources.getColor(R.color.digital_text));
-            mLowTempPaint = createTextPaint(resources.getColor(R.color.digital_text2));
+            mLowTempPaint = createTextPaint(resources.getColor(R.color.digital_text_dark));
             mIconPaint = new Paint();
 
             mTime = new Time();
@@ -293,16 +289,17 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
             // Load resources that have alternate values for round watches.
             Resources resources = SunshineWatchFace.this.getResources();
             boolean isRound = insets.isRound();
-            mXOffset = resources.getDimension(isRound
-                    ? R.dimen.digital_x_offset_round : R.dimen.digital_x_offset);
+
             float timeTextSize = resources.getDimension(isRound
                     ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
             float dateTextSize = resources.getDimension(isRound
                     ? R.dimen.digital_date_text_size_round : R.dimen.digital_date_text_size);
+            float weatherTextSize = resources.getDimension(isRound
+                    ? R.dimen.digital_weather_text_size_round : R.dimen.digital_weather_text_size);
             mTimePaint.setTextSize(timeTextSize);
             mDatePaint.setTextSize(dateTextSize);
-            mHighTempPaint.setTextSize(timeTextSize);
-            mLowTempPaint.setTextSize(timeTextSize);
+            mHighTempPaint.setTextSize(weatherTextSize);
+            mLowTempPaint.setTextSize(weatherTextSize);
         }
 
         @Override
@@ -324,6 +321,14 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                 mAmbient = inAmbientMode;
                 if (mLowBitAmbient) {
                     mTimePaint.setAntiAlias(!inAmbientMode);
+                    mIconPaint.setAntiAlias(!inAmbientMode);
+                    mDatePaint.setAntiAlias(!inAmbientMode);
+                    mIconPaint.setColor(resources.getColor(R.color.digital_text));
+                    mLowTempPaint.setAntiAlias(!inAmbientMode);
+                    mLowTempPaint.setColor(resources.getColor(R.color.digital_text));
+                    mHighTempPaint.setAntiAlias(!inAmbientMode);
+                    mSeparatorPaint.setAntiAlias(!inAmbientMode);
+                    mSeparatorPaint.setColor(resources.getColor(R.color.digital_text));
                 }
                 invalidate();
             }
@@ -370,33 +375,43 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                 canvas.drawRect(0, 0, bounds.width(), bounds.height(), mBackgroundPaint);
             }
 
-            mYOffset = (float) (bounds.centerY() - bounds.centerY()/2 * 0.75);
-
-            // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
+            // Time
             mTime.setToNow();
             String time = String.format("%d:%02d", mTime.hour, mTime.minute);
+            float xTimeOffset = bounds.centerX() - (mTimePaint.measureText(time))/2;
+            float yTimeOffset = (float) (bounds.centerY() - bounds.centerY()/2 * 0.55) ;
 
-            canvas.drawText(time, bounds.centerX() - (mTimePaint.measureText(time))/2 , mYOffset, mTimePaint);
+            canvas.drawText(time, xTimeOffset , yTimeOffset , mTimePaint);
+
+            // Date
+            String formattedDate = mDateFormat.format(mDate).toUpperCase();
+            float xDateOffset = bounds.centerX() - (mDatePaint.measureText(formattedDate))/2;
+            float yDateOffset = (float) (bounds.centerY() - bounds.centerY()/2 * 0.15);
+
+            canvas.drawText(formattedDate, xDateOffset, yDateOffset , mDatePaint);
 
             // Only render the day of week and date if there is no peek card, so they do not bleed
             // into each other in ambient mode.
-            if (getPeekCardPosition().isEmpty()) {
-                // Date
-                String formattedDate = mDateFormat.format(mDate).toUpperCase();
-                canvas.drawText(
-                        formattedDate,
-                        bounds.centerX() - (mDatePaint.measureText(formattedDate))/2 , mYOffset + mLineHeight, mDatePaint);
+            if (getPeekCardPosition().isEmpty() && !isInAmbientMode()) {
 
+                float xLineStart = bounds.centerX() - 30;
+                float xLineEnd = bounds.centerX() + 30;
+                float yLineOffset = (float) (bounds.centerY() * 1.13);
 
-                canvas.drawLine(bounds.centerX() - 35, bounds.centerY() + 10,
-                                bounds.centerX() + 35, bounds.centerY() + 10, mSeparatorPaint);
+                canvas.drawLine(xLineStart, yLineOffset, xLineEnd, yLineOffset, mSeparatorPaint);
+
                 if(mHigh != null) {
                     canvas.drawText(
                         String.valueOf(mHigh),
-                            (float)(bounds.centerX() - bounds.centerX() * 0.15) ,(float)(bounds.centerY() + bounds.centerY() * 0.60), mHighTempPaint);
+                            (float)(bounds.centerX() - bounds.centerX() * 0.18) ,(float)(bounds.centerY() * 1.55), mHighTempPaint);
+                }
+                if(mLow != null) {
+                    canvas.drawText(
+                            String.valueOf(mLow),
+                            (float)(bounds.centerX() * 1.26) ,(float)(bounds.centerY() * 1.55), mLowTempPaint);
                 }
                 if(mIconBitmap != null) {
-                    canvas.drawBitmap(mIconBitmap, (float)(bounds.centerX() - bounds.centerX() * 0.75), (float)(bounds.centerY() + bounds.centerY() * 0.20), mIconPaint);
+                    canvas.drawBitmap(mIconBitmap, (float)(bounds.centerX() - bounds.centerX() * 0.65), (float)(bounds.centerY() * 1.27), mIconPaint);
                 }
             }
         }

@@ -36,6 +36,7 @@ import com.example.android.sunshine.app.BuildConfig;
 import com.example.android.sunshine.app.MainActivity;
 import com.example.android.sunshine.app.R;
 import com.example.android.sunshine.app.Utility;
+import com.example.android.sunshine.app.WatchFaceClient;
 import com.example.android.sunshine.app.data.WeatherContract;
 import com.example.android.sunshine.app.muzei.WeatherMuzeiSource;
 import com.google.android.gms.common.ConnectionResult;
@@ -382,6 +383,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 updateWidgets();
                 updateMuzei();
                 notifyWeather();
+                new WatchFaceClient(context).updateWatchFace();
             }
             Log.d(LOG_TAG, "Sync Complete. " + cVVector.size() + " Inserted");
             setLocationStatus(getContext(), LOCATION_STATUS_OK);
@@ -512,59 +514,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                     SharedPreferences.Editor editor = prefs.edit();
                     editor.putLong(lastNotificationKey, System.currentTimeMillis());
                     editor.commit();
-                    // Update watch
-                    updateWatchFace(Utility.formatTemperature(context, high), Utility.formatTemperature(context, low), largeIcon);
                 }
                 cursor.close();
             }
         }
-    }
-
-    /**
-     * Update Watch face
-     * @param high
-     * @param low
-     * @param icon
-     */
-    private void updateWatchFace(final String high, final String low, final Bitmap icon){
-        Log.v(LOG_TAG, "updateWatchFace");
-        mGoogleApiClient = new GoogleApiClient.Builder(getContext())
-                .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
-                    @Override
-                    public void onConnected(@Nullable Bundle connectionHint) {
-                        Log.d(LOG_TAG, "onConnected: " + connectionHint);
-                        PutDataMapRequest dataMapRequest = PutDataMapRequest.create("/weather_data");
-                        dataMapRequest.getDataMap().putString("high", high);
-                        dataMapRequest.getDataMap().putString("low", low);
-                        dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(icon));
-                        //dataMapRequest.setUrgent();
-                        PutDataRequest request = dataMapRequest.asPutDataRequest();
-                        Wearable.DataApi.putDataItem(mGoogleApiClient, request).setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
-                            @Override
-                            public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
-                                if (dataItemResult.getStatus().isSuccess()) {
-                                    Log.d(LOG_TAG, "Data stored");
-                                } else {
-                                    Log.d(LOG_TAG, "Data not stored");
-                                }
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onConnectionSuspended(int cause) {
-                        Log.d(LOG_TAG, "onConnectionSuspended: " + cause);
-                    }
-                })
-                .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
-                    @Override
-                    public void onConnectionFailed(ConnectionResult connectionResult) {
-                        Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
-                    }
-                })
-                .addApi(Wearable.API)
-                .build();
-        mGoogleApiClient.connect();
     }
 
     /**
