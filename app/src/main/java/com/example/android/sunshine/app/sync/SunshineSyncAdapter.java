@@ -373,7 +373,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 updateWidgets();
                 updateMuzei();
                 notifyWeather();
-                new WatchFaceUpdater().updateWatchFace(context);
+                WatchFaceUpdater.getInstance(context).updateWatchFace();
             }
             Log.d(LOG_TAG, "Sync Complete. " + cVVector.size() + " Inserted");
             setLocationStatus(getContext(), LOCATION_STATUS_OK);

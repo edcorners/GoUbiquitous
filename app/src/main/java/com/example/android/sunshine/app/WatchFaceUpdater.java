@@ -7,7 +7,6 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
@@ -15,28 +14,20 @@ import android.util.Log;
 
 import com.bumptech.glide.Glide;
 import com.example.android.sunshine.app.data.WeatherContract;
-import com.example.android.sunshine.app.sync.SunshineSyncAdapter;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
-import com.google.android.gms.wearable.DataEvent;
-import com.google.android.gms.wearable.DataEventBuffer;
-import com.google.android.gms.wearable.DataItem;
-import com.google.android.gms.wearable.DataMap;
-import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
-import com.google.android.gms.wearable.WearableListenerService;
 
 import java.util.concurrent.ExecutionException;
 
 /**
  * Created by Edison on 8/18/2016.
  */
-public class WatchFaceUpdater extends WearableListenerService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class WatchFaceUpdater  implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     public final String LOG_TAG = WatchFaceUpdater.class.getSimpleName();
 
@@ -59,11 +50,24 @@ public class WatchFaceUpdater extends WearableListenerService implements GoogleA
     private double high;
     private double low;
 
-    public WatchFaceUpdater() {}
+    private static WatchFaceUpdater instance;
 
-    public void updateWatchFace(Context context) {
+    public static WatchFaceUpdater getInstance(Context context){
+        instance = instance == null ? new WatchFaceUpdater(context):instance;
+        return instance;
+    }
+
+    private WatchFaceUpdater(Context context) {
         this.mContext = context;
-        //Context context = getContext();
+        mGoogleApiClient = new GoogleApiClient.Builder(mContext)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(Wearable.API)
+                .build();
+        mGoogleApiClient.connect();
+    }
+
+    public void updateWatchFace() {
         //checking the last update and notify if it' the first of the day
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mContext);
 
@@ -79,7 +83,6 @@ public class WatchFaceUpdater extends WearableListenerService implements GoogleA
             final int weatherId = cursor.getInt(INDEX_WEATHER_ID);
             high = cursor.getDouble(INDEX_MAX_TEMP);
             low = cursor.getDouble(INDEX_MIN_TEMP);
-            String desc = cursor.getString(INDEX_SHORT_DESC);
 
             int iconId = Utility.getIconResourceForWeatherCondition(weatherId);
             Resources resources = mContext.getResources();
@@ -103,38 +106,38 @@ public class WatchFaceUpdater extends WearableListenerService implements GoogleA
 
             // Update watch
             Log.v(LOG_TAG, "updateWatchFace");
-            mGoogleApiClient = new GoogleApiClient.Builder(mContext)
-                    .addConnectionCallbacks(this)
-                    .addOnConnectionFailedListener(this)
-                    .addApi(Wearable.API)
-                    .build();
-            mGoogleApiClient.connect();
-        }
-        cursor.close();
 
+        }
+        sendWeatherData();
+        cursor.close();
     }
 
     @Override
     public void onConnected(Bundle bundle) {
         Log.d(LOG_TAG, "onConnected: " + bundle);
+        sendWeatherData();
+    }
 
-        PutDataMapRequest dataMapRequest = PutDataMapRequest.create("/weather_data");
-        dataMapRequest.getDataMap().putString("high", Utility.formatTemperature(mContext, high));
-        dataMapRequest.getDataMap().putString("low", Utility.formatTemperature(mContext,low));
-        dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(mIcon));
-        dataMapRequest.getDataMap().putString("timestamp","_"+ System.currentTimeMillis());
-        Log.d(LOG_TAG, " high:"+high+" low:"+low);
-        PutDataRequest request = dataMapRequest.asPutDataRequest();
-        Wearable.DataApi.putDataItem(mGoogleApiClient, request).setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
-            @Override
-            public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
-                if (dataItemResult.getStatus().isSuccess()) {
-                    Log.d(LOG_TAG, "Data stored "+dataItemResult.getDataItem().toString());
-                } else {
-                    Log.d(LOG_TAG, "Data not stored");
+    private void sendWeatherData() {
+        if(mIcon != null) {
+            PutDataMapRequest dataMapRequest = PutDataMapRequest.create("/weather_data");
+            dataMapRequest.getDataMap().putString("high", Utility.formatTemperature(mContext, high));
+            dataMapRequest.getDataMap().putString("low", Utility.formatTemperature(mContext, low));
+            dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(mIcon));
+            //dataMapRequest.getDataMap().putString("timestamp", "_" + System.currentTimeMillis());
+            Log.d(LOG_TAG, " high:" + high + " low:" + low);
+            PutDataRequest request = dataMapRequest.asPutDataRequest();
+            Wearable.DataApi.putDataItem(mGoogleApiClient, request).setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                @Override
+                public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
+                    if (dataItemResult.getStatus().isSuccess()) {
+                        Log.d(LOG_TAG, "Data stored " + dataItemResult.getDataItem().toString());
+                    } else {
+                        Log.d(LOG_TAG, "Data not stored");
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     @Override
@@ -147,21 +150,4 @@ public class WatchFaceUpdater extends WearableListenerService implements GoogleA
         Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
     }
 
-    @Override
-    public void onDataChanged(DataEventBuffer dataEvents) {
-        Log.d(LOG_TAG, "onDataChanged: " + dataEvents);
-        for (DataEvent dataEvent : dataEvents) {
-            if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
-                continue;
-            }
-
-            DataItem dataItem = dataEvent.getDataItem();
-            String path = dataItem.getUri().getPath();
-            if (!path.equals("/weather_data_request")) {
-                continue;
-            }
-            SunshineSyncAdapter.syncImmediately(this);
-        }
-        super.onDataChanged(dataEvents);
-    }
 }

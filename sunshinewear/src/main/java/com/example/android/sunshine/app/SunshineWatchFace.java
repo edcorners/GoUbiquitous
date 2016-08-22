@@ -22,7 +22,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -35,7 +34,6 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
-import android.text.format.DateFormat;
 import android.text.format.Time;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -55,21 +53,19 @@ import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
-import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Digital watch face with seconds. In ambient mode, the seconds aren't displayed. On devices with
  * low-bit ambient mode, the text is drawn without anti-aliasing in ambient mode.
  */
-public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi.DataListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LoadBitmapTask.Callback {
+public class SunshineWatchFace extends CanvasWatchFaceService {
 
     private final String LOG_TAG = SunshineWatchFace.class.getSimpleName();
     private static final Typeface NORMAL_TYPEFACE =
@@ -94,54 +90,19 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
 
     @Override
     public Engine onCreateEngine() {
+        Engine engine = new Engine();
         mGoogleApiClient = new GoogleApiClient.Builder(SunshineWatchFace.this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
+                .addConnectionCallbacks(engine)
+                .addOnConnectionFailedListener(engine)
                 .addApi(Wearable.API)
                 .build();
         mGoogleApiClient.connect();
-        requestData();
-        return new Engine();
+        requestWeatherData();
+
+        return engine;
     }
 
-    @Override
-    public void onConnected(@Nullable Bundle bundle) {
-        Wearable.DataApi.addListener(mGoogleApiClient, this);
-        Log.d(LOG_TAG, "onConnected: " + bundle);
-    }
-
-    @Override
-    public void onConnectionSuspended(int i) {
-        Log.d(LOG_TAG, "onConnectionSuspended: " + i);
-        Wearable.DataApi.removeListener(mGoogleApiClient, this);
-    }
-
-    @Override
-    public void onDataChanged(DataEventBuffer dataEventBuffer) {
-        Log.d(LOG_TAG, "onDataChanged: " + dataEventBuffer);
-        for (DataEvent dataEvent : dataEventBuffer) {
-            if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
-                continue;
-            }
-
-            DataItem dataItem = dataEvent.getDataItem();
-            String path = dataItem.getUri().getPath();
-            if (!path.equals("/weather_data")) {
-                continue;
-            }
-
-            DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
-            DataMap dataMap = dataMapItem.getDataMap();
-            mHigh = dataMap.getString("high");
-            mLow = dataMap.getString("low");
-            Asset asset = dataMap.getAsset("icon");
-            Asset[] assets = {asset};
-            LoadBitmapTask loadBitmapTask = new LoadBitmapTask(mGoogleApiClient, this);
-            loadBitmapTask.execute(assets);
-        }
-    }
-
-    private void requestData() {
+    private void requestWeatherData() {
         PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/weather_data_request");
         putDataMapRequest.getDataMap().putLong("timestamp", System.currentTimeMillis());
         PutDataRequest putDataRequest = putDataMapRequest.asPutDataRequest();
@@ -158,15 +119,6 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                 });
     }
 
-    @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-        Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
-    }
-
-    @Override
-    public void onLoadBitmapFinished(Bitmap bitmap) {
-        mIconBitmap = bitmap;
-    }
 
     private static class EngineHandler extends Handler {
         private final WeakReference<SunshineWatchFace.Engine> mWeakReference;
@@ -188,7 +140,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine {
+    private class Engine extends CanvasWatchFaceService.Engine implements DataApi.DataListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LoadBitmapTask.Callback{
         final Handler mUpdateTimeHandler = new EngineHandler(this);
         boolean mRegisteredTimeZoneReceiver = false;
         Paint mBackgroundPaint;
@@ -231,7 +183,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                     .setShowSystemUiTime(false)
                     .setAcceptsTapEvents(true)
                     .build());
-            resources = SunshineWatchFace.this.getResources();
+            Resources resources = SunshineWatchFace.this.getResources();
 
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
@@ -342,6 +294,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
             if (mAmbient != inAmbientMode) {
                 mAmbient = inAmbientMode;
                 if (mLowBitAmbient) {
+                    Log.v(LOG_TAG, " LowAmbient on");
                     mTimePaint.setAntiAlias(!inAmbientMode);
                     mIconPaint.setAntiAlias(!inAmbientMode);
                     mDatePaint.setAntiAlias(!inAmbientMode);
@@ -468,6 +421,54 @@ public class SunshineWatchFace extends CanvasWatchFaceService implements DataApi
                         - (timeMs % INTERACTIVE_UPDATE_RATE_MS);
                 mUpdateTimeHandler.sendEmptyMessageDelayed(MSG_UPDATE_TIME, delayMs);
             }
+        }
+
+
+        @Override
+        public void onConnected(@Nullable Bundle bundle) {
+            Wearable.DataApi.addListener(mGoogleApiClient, this);
+            Log.d(LOG_TAG, "onConnected: " + bundle);
+        }
+
+        @Override
+        public void onConnectionSuspended(int i) {
+            Log.d(LOG_TAG, "onConnectionSuspended: " + i);
+            Wearable.DataApi.removeListener(mGoogleApiClient, this);
+        }
+
+        @Override
+        public void onDataChanged(DataEventBuffer dataEventBuffer) {
+            Log.d(LOG_TAG, "onDataChanged: " + dataEventBuffer);
+            for (DataEvent dataEvent : dataEventBuffer) {
+                if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
+                    continue;
+                }
+
+                DataItem dataItem = dataEvent.getDataItem();
+                String path = dataItem.getUri().getPath();
+                if (!path.equals("/weather_data")) {
+                    continue;
+                }
+
+                DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
+                DataMap dataMap = dataMapItem.getDataMap();
+                mHigh = dataMap.getString("high");
+                mLow = dataMap.getString("low");
+                Asset asset = dataMap.getAsset("icon");
+                Asset[] assets = {asset};
+                LoadBitmapTask loadBitmapTask = new LoadBitmapTask(mGoogleApiClient, this);
+                loadBitmapTask.execute(assets);
+            }
+        }
+
+        @Override
+        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+            Log.d(LOG_TAG, "onConnectionFailed: " + connectionResult);
+        }
+
+        @Override
+        public void onLoadBitmapFinished(Bitmap bitmap) {
+            mIconBitmap = bitmap;
         }
     }
 }
