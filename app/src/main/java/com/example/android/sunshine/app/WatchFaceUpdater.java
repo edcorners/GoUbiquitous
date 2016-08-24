@@ -35,14 +35,12 @@ public class WatchFaceUpdater  implements GoogleApiClient.ConnectionCallbacks, G
             WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
             WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
             WeatherContract.WeatherEntry.COLUMN_MIN_TEMP,
-            WeatherContract.WeatherEntry.COLUMN_SHORT_DESC
     };
 
     // these indices must match the projection
     private static final int INDEX_WEATHER_ID = 0;
     private static final int INDEX_MAX_TEMP = 1;
     private static final int INDEX_MIN_TEMP = 2;
-    private static final int INDEX_SHORT_DESC = 3;
 
     private GoogleApiClient mGoogleApiClient;
     private Context mContext;
@@ -124,7 +122,8 @@ public class WatchFaceUpdater  implements GoogleApiClient.ConnectionCallbacks, G
             dataMapRequest.getDataMap().putString("high", Utility.formatTemperature(mContext, high));
             dataMapRequest.getDataMap().putString("low", Utility.formatTemperature(mContext, low));
             dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(mIcon));
-            //dataMapRequest.getDataMap().putString("timestamp", "_" + System.currentTimeMillis());
+            dataMapRequest.getDataMap().putString("timestamp", "_" + System.currentTimeMillis());
+            dataMapRequest.setUrgent();
             Log.d(LOG_TAG, " high:" + high + " low:" + low);
             PutDataRequest request = dataMapRequest.asPutDataRequest();
             Wearable.DataApi.putDataItem(mGoogleApiClient, request).setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
