@@ -101,10 +101,6 @@ public class WatchFaceUpdater  implements GoogleApiClient.ConnectionCallbacks, G
                 Log.e(LOG_TAG, "Error retrieving large mIcon from " + artUrl, e);
                 mIcon = BitmapFactory.decodeResource(resources, artResourceId);
             }
-
-            // Update watch
-            Log.v(LOG_TAG, "updateWatchFace");
-
         }
         sendWeatherData();
         cursor.close();
@@ -118,11 +114,11 @@ public class WatchFaceUpdater  implements GoogleApiClient.ConnectionCallbacks, G
 
     private void sendWeatherData() {
         if(mIcon != null) {
-            PutDataMapRequest dataMapRequest = PutDataMapRequest.create("/weather_data");
-            dataMapRequest.getDataMap().putString("high", Utility.formatTemperature(mContext, high));
-            dataMapRequest.getDataMap().putString("low", Utility.formatTemperature(mContext, low));
-            dataMapRequest.getDataMap().putAsset("icon", Utility.createAssetFromBitmap(mIcon));
-            dataMapRequest.getDataMap().putString("timestamp", "_" + System.currentTimeMillis());
+            PutDataMapRequest dataMapRequest = PutDataMapRequest.create(mContext.getString(R.string.weather_data_uri));
+            dataMapRequest.getDataMap().putString(mContext.getString(R.string.data_item_high), Utility.formatTemperature(mContext, high));
+            dataMapRequest.getDataMap().putString(mContext.getString(R.string.data_item_low), Utility.formatTemperature(mContext, low));
+            dataMapRequest.getDataMap().putAsset(mContext.getString(R.string.data_item_icon), Utility.createAssetFromBitmap(mIcon));
+            dataMapRequest.getDataMap().putString(mContext.getString(R.string.data_item_timestamp), "_" + System.currentTimeMillis());
             dataMapRequest.setUrgent();
             Log.d(LOG_TAG, " high:" + high + " low:" + low);
             PutDataRequest request = dataMapRequest.asPutDataRequest();

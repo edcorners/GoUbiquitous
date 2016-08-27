@@ -1,4 +1,12 @@
 <resources>
     <string name="app_name">Sunshine Wear</string>
     <string name="my_digital_name">Sunshine</string>
+    <string name="data_request_uri">/weather_data_request</string>
+    <string name="timestamp_data_request">timestamp</string>
+    <string name="data_request_failed">Requesting data failed</string>
+    <string name="data_request_succeeded">Requesting data succeeded</string>
+    <string name="app_data_uri">/weather_data</string>
+    <string name="data_item_high">high</string>
+    <string name="data_item_low">low</string>
+    <string name="data_item_icon">icon</string>
 </resources>

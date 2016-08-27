@@ -50,7 +50,7 @@ public class LoadBitmapTask extends AsyncTask<Asset,Void,Bitmap> {
         // convert asset into a file descriptor and block until it's ready
         InputStream assetInputStream = Wearable.DataApi.getFdForAsset(
                 mGoogleApiClient, asset).await().getInputStream();
-        mGoogleApiClient.disconnect();
+        //mGoogleApiClient.disconnect();
 
         if (assetInputStream == null) {
             Log.w(LOG_TAG, "Requested an unknown Asset.");

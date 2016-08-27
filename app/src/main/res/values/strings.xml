@@ -235,5 +235,10 @@
     <string name="gcm_defaultSenderId" translatable="false"></string>
     <!-- For Google Places API Attributions -->
     <string name="attribution_text">Powered by Google</string>
+    <string name="weather_data_uri">/weather_data</string>
+    <string name="data_item_high">high</string>
+    <string name="data_item_low">low</string>
+    <string name="data_item_icon">icon</string>
+    <string name="data_item_timestamp">timestamp</string>
 
 </resources>

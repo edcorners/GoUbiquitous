@@ -103,17 +103,17 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
     }
 
     private void requestWeatherData() {
-        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/weather_data_request");
-        putDataMapRequest.getDataMap().putLong("timestamp", System.currentTimeMillis());
+        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create(getString(R.string.data_request_uri));
+        putDataMapRequest.getDataMap().putLong(getString(R.string.timestamp_data_request), System.currentTimeMillis());
         PutDataRequest putDataRequest = putDataMapRequest.asPutDataRequest();
         Wearable.DataApi.putDataItem(mGoogleApiClient, putDataRequest)
                 .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
                     @Override
                     public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
                         if (!dataItemResult.getStatus().isSuccess()){
-                            Log.e(LOG_TAG, "Requesting data failed");
+                            Log.e(LOG_TAG, getString(R.string.data_request_failed));
                         } else {
-                            Log.d(LOG_TAG, "Requesting data succeeded");
+                            Log.d(LOG_TAG, getString(R.string.data_request_succeeded));
                         }
                     }
                 });
@@ -172,6 +172,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
          * disable anti-aliasing in ambient mode.
          */
         boolean mLowBitAmbient;
+        private float iconYOffset;
+        private float iconXOffset;
 
         @Override
         public void onCreate(SurfaceHolder holder) {
@@ -274,6 +276,9 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             mDatePaint.setTextSize(dateTextSize);
             mHighTempPaint.setTextSize(weatherTextSize);
             mLowTempPaint.setTextSize(weatherTextSize);
+
+            iconYOffset = isRound ? 5 : 0;
+            iconXOffset = isRound ? 5 : 0;
         }
 
         @Override
@@ -386,7 +391,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
                             (float)(bounds.centerX() * 1.26) ,(float)(bounds.centerY() * 1.55), mLowTempPaint);
                 }
                 if(mIconBitmap != null) {
-                    canvas.drawBitmap(mIconBitmap, (float)(bounds.centerX() - bounds.centerX() * 0.65), (float)(bounds.centerY() * 1.27), mIconPaint);
+                    canvas.drawBitmap(mIconBitmap, (float)(bounds.centerX() - bounds.centerX() * 0.65) +iconXOffset, (float)(bounds.centerY() * 1.27) +iconYOffset, mIconPaint);
                 }
             }
         }
@@ -446,15 +451,15 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
 
                 DataItem dataItem = dataEvent.getDataItem();
                 String path = dataItem.getUri().getPath();
-                if (!path.equals("/weather_data")) {
+                if (!path.equals(getString(R.string.app_data_uri))) {
                     continue;
                 }
 
                 DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
                 DataMap dataMap = dataMapItem.getDataMap();
-                mHigh = dataMap.getString("high");
-                mLow = dataMap.getString("low");
-                Asset asset = dataMap.getAsset("icon");
+                mHigh = dataMap.getString(getString(R.string.data_item_high));
+                mLow = dataMap.getString(getString(R.string.data_item_low));
+                Asset asset = dataMap.getAsset(getString(R.string.data_item_icon));
                 Asset[] assets = {asset};
                 LoadBitmapTask loadBitmapTask = new LoadBitmapTask(mGoogleApiClient, this);
                 loadBitmapTask.execute(assets);
